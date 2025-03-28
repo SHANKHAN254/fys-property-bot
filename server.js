@@ -20,7 +20,7 @@ async function sendMessage(payload) {
       method: 'post',
       url: `https://graph.facebook.com/${process.env.VERSION}/${process.env.PHONE_NUMBER_ID}/messages`,
       headers: {
-        'Authorization': `Bearer ${process.env.ACCESS_TOKEN}`,
+        Authorization: `Bearer ${process.env.ACCESS_TOKEN}`,
         'Content-Type': 'application/json'
       },
       data: payload
@@ -28,7 +28,10 @@ async function sendMessage(payload) {
     console.log('Message sent successfully:', response.data);
     return response.data;
   } catch (error) {
-    console.error('Error sending message:', error.response ? error.response.data : error.message);
+    console.error(
+      'Error sending message:',
+      error.response ? error.response.data : error.message
+    );
     throw error;
   }
 }
@@ -41,10 +44,10 @@ async function sendMessage(payload) {
  */
 function createTextMessage(recipient, text) {
   return {
-    messaging_product: "whatsapp",
-    recipient_type: "individual",
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
     to: recipient,
-    type: "text",
+    type: 'text',
     text: {
       body: text
     }
@@ -52,64 +55,56 @@ function createTextMessage(recipient, text) {
 }
 
 /**
- * Creates an interactive button message payload.
- * This message includes buttons for the following flows:
- * 1. View Property Listings
- * 2. Buy a Property
- * 3. Sell Your Property
- * 4. Contact Admin
- * 5. FAQs/Help
- *
- * @param {string} recipient - The recipient’s WhatsApp number.
+ * Creates a LIST interactive message payload with 5 options.
+ * Unlike 'button' interactive type, 'list' allows more than 3 items.
+ * @param {string} recipient - The admin’s WhatsApp number.
  * @returns {Object} The JSON payload.
  */
-function createInteractiveMessage(recipient) {
+function createListInteractiveMessage(recipient) {
   return {
-    messaging_product: "whatsapp",
-    recipient_type: "individual",
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
     to: recipient,
-    type: "interactive",
+    type: 'interactive',
     interactive: {
-      type: "button",
+      type: 'list',
+      header: {
+        type: 'text',
+        text: "FY'S PROPERTY Bot is LIVE!"
+      },
       body: {
-        text: "FY'S PROPERTY Bot is LIVE. Please choose an option to test:"
+        text: "Please choose an option to test:"
+      },
+      footer: {
+        text: "You can pick any of the 5 options below."
       },
       action: {
-        buttons: [
+        button: 'Show Options',
+        sections: [
           {
-            type: "reply",
-            reply: {
-              id: "option1",
-              title: "View Property Listings"
-            }
-          },
-          {
-            type: "reply",
-            reply: {
-              id: "option2",
-              title: "Buy a Property"
-            }
-          },
-          {
-            type: "reply",
-            reply: {
-              id: "option3",
-              title: "Sell Your Property"
-            }
-          },
-          {
-            type: "reply",
-            reply: {
-              id: "option4",
-              title: "Contact Admin"
-            }
-          },
-          {
-            type: "reply",
-            reply: {
-              id: "option5",
-              title: "FAQs/Help"
-            }
+            title: 'Main Menu',
+            rows: [
+              {
+                id: 'option1',
+                title: 'View Property Listings'
+              },
+              {
+                id: 'option2',
+                title: 'Buy a Property'
+              },
+              {
+                id: 'option3',
+                title: 'Sell Your Property'
+              },
+              {
+                id: 'option4',
+                title: 'Contact Admin'
+              },
+              {
+                id: 'option5',
+                title: 'FAQs/Help'
+              }
+            ]
           }
         ]
       }
@@ -118,15 +113,21 @@ function createInteractiveMessage(recipient) {
 }
 
 /**
- * Sends an admin alert message (with interactive buttons) immediately after the server starts.
+ * Sends an admin alert message (as a list interactive message)
+ * immediately after the server starts.
  */
 async function sendAdminAlert() {
   const adminNumber = process.env.ADMIN_WAID;
   try {
-    await sendMessage(createInteractiveMessage(adminNumber));
-    console.log('Admin interactive menu sent successfully.');
+    // Create and send the list interactive message
+    const alertPayload = createListInteractiveMessage(adminNumber);
+    await sendMessage(alertPayload);
+    console.log('Admin interactive list sent successfully.');
   } catch (error) {
-    console.error('Failed to send admin interactive menu:', error.response ? error.response.data : error.message);
+    console.error(
+      'Failed to send admin interactive list:',
+      error.response ? error.response.data : error.message
+    );
   }
 }
 
@@ -142,9 +143,9 @@ app.post('/webhook', async (req, res) => {
       console.error("Invalid payload received. 'from' and 'message' are required.");
       return res.status(400).send("Invalid payload. 'from' and 'message' are required.");
     }
-    
+
     console.log(`Received message from ${from}: ${message}`);
-    
+
     // Immediate reply to the user.
     const replyText = `Thank you for contacting FY'S PROPERTY. We received your message: "${message}". Our team will get back to you shortly.`;
     await sendMessage(createTextMessage(from, replyText));
@@ -154,10 +155,10 @@ app.post('/webhook', async (req, res) => {
     const forwardText = `User ${from} sent: "${message}"`;
     await sendMessage(createTextMessage(process.env.ADMIN_WAID, forwardText));
     console.log(`Forwarded user message from ${from} to admin.`);
-    
+
     res.sendStatus(200);
   } catch (error) {
-    console.error("Error processing /webhook:", error.response ? error.response.data : error.message);
+    console.error('Error processing /webhook:', error.response ? error.response.data : error.message);
     res.sendStatus(500);
   }
 });
@@ -167,7 +168,7 @@ app.get('/', (req, res) => {
   res.send("FY'S PROPERTY WhatsApp Bot is running.");
 });
 
-// Start the server and send the admin interactive menu alert.
+// Start the server and send the admin interactive menu (list).
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   sendAdminAlert();
