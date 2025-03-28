@@ -28,13 +28,13 @@ function sendMessage(data) {
 }
 
 /**
- * Returns a stringified JSON payload for a text message.
+ * Returns a JSON payload for a text message.
  * @param {string} recipient - The recipient’s WhatsApp number.
  * @param {string} text - The message body.
- * @returns {string} JSON payload.
+ * @returns {Object} JSON payload.
  */
 function getTextMessageInput(recipient, text) {
-  return JSON.stringify({
+  return {
     "messaging_product": "whatsapp",
     "preview_url": false,
     "recipient_type": "individual",
@@ -43,7 +43,22 @@ function getTextMessageInput(recipient, text) {
     "text": {
       "body": text
     }
-  });
+  };
+}
+
+/**
+ * Sends an alert message to the admin after successful deployment.
+ */
+function sendAdminAlert() {
+  const adminNumber = process.env.ADMIN_WAID;
+  const alertText = `FY'S PROPERTY Bot has been successfully deployed and is running on port ${PORT}.`;
+  sendMessage(getTextMessageInput(adminNumber, alertText))
+    .then(() => {
+      console.log('Admin alert message sent.');
+    })
+    .catch((error) => {
+      console.error('Failed to send admin alert message:', error.response ? error.response.data : error.message);
+    });
 }
 
 /**
@@ -53,7 +68,7 @@ function getTextMessageInput(recipient, text) {
 app.post('/webhook', async (req, res) => {
   try {
     const from = req.body.from; // sender's WhatsApp number
-    const userMessage = req.body.message.trim().toLowerCase();
+    const userMessage = req.body.message ? req.body.message.trim().toLowerCase() : "";
     console.log(`Received message from ${from}: ${userMessage}`);
 
     let replyText = '';
@@ -99,16 +114,18 @@ For further help, type "menu" to return to the main options.`;
     await sendMessage(getTextMessageInput(from, replyText));
     res.sendStatus(200);
   } catch (error) {
-    console.error('Error processing webhook:', error);
+    console.error('Error processing webhook:', error.response ? error.response.data : error.message);
     res.sendStatus(500);
   }
 });
 
-// Simple GET endpoint to confirm the server is running
+// A simple GET endpoint to confirm the server is running.
 app.get('/', (req, res) => {
   res.send("FY'S PROPERTY WhatsApp Bot is running.");
 });
 
+// Start the server and send an admin alert once it's up.
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+  sendAdminAlert();
 });
