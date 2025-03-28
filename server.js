@@ -47,7 +47,7 @@ function getTextMessageInput(recipient, text) {
 }
 
 /**
- * Sends an alert message to the admin after successful deployment.
+ * Sends an alert message to the admin after the server starts.
  */
 function sendAdminAlert() {
   const adminNumber = process.env.ADMIN_WAID;
@@ -62,56 +62,33 @@ function sendAdminAlert() {
 }
 
 /**
- * Main webhook endpoint to process incoming messages.
+ * Webhook endpoint to process incoming messages.
+ * Every message from a user receives an immediate reply.
  * Expected POST body: { from: 'sender_phone', message: 'user input' }
  */
 app.post('/webhook', async (req, res) => {
   try {
-    const from = req.body.from; // sender's WhatsApp number
-    const userMessage = req.body.message ? req.body.message.trim().toLowerCase() : "";
-    console.log(`Received message from ${from}: ${userMessage}`);
+    // Get the sender's phone number and message from the request body.
+    const from = req.body.from;
+    const message = req.body.message || '';
+    
+    // Log the incoming message.
+    console.log(`Received message from ${from}: ${message}`);
 
-    let replyText = '';
+    // Prepare a generic, sensitive reply for any incoming message.
+    const replyText = `Thank you for contacting FY'S PROPERTY. We have received your message: "${message}". Our team will respond to you shortly.`;
 
-    // Main menu and options
-    if (userMessage === 'menu' || userMessage === 'start') {
-      replyText = `Welcome to FY'S PROPERTY – Your gateway to dream properties!
-Please choose an option:
-1. View Property Listings
-2. Buy a Property
-3. Sell Your Property
-4. Contact Admin
-5. FAQs / Help
-Reply with the option number.`;
-    } else if (userMessage === '1') {
-      replyText = `Our current property listings:
-1. Cozy Apartment - $250,000
-2. Modern Villa - $750,000
-3. Luxury Condo - $500,000
-Reply with the property number for more details.`;
-    } else if (userMessage === '2') {
-      replyText = `You've chosen to buy a property.
-Please reply with the property number you wish to purchase, and we'll guide you through the next steps.`;
-    } else if (userMessage === '3') {
-      replyText = `To sell your property, please send us the details (address, price, photos).
-Our team will review your submission and get back to you shortly.`;
-    } else if (userMessage === '4') {
-      // Forward the user's request to the admin
-      const adminNumber = process.env.ADMIN_WAID;
-      const forwardText = `User ${from} has requested to contact admin. Message: "${req.body.message}"`;
-      await sendMessage(getTextMessageInput(adminNumber, forwardText));
-      replyText = `Your message has been forwarded to our admin. They will contact you shortly.`;
-    } else if (userMessage === '5' || userMessage === 'faqs') {
-      replyText = `FAQs:
-Q: How do I view listings? A: Reply "1" from the main menu.
-Q: How do I buy? A: Reply "2" and follow the instructions.
-For further help, type "menu" to return to the main options.`;
-    } else {
-      replyText = `Thank you for your message. To see options, please type "menu".`;
-    }
-
-    // Send the reply back to the user
+    // Send the reply immediately.
     await sendMessage(getTextMessageInput(from, replyText));
+    console.log(`Replied to ${from} with: ${replyText}`);
+
+    // Optionally, forward the user's message to admin as well.
+    const adminForwardText = `User ${from} sent: "${message}"`;
+    sendMessage(getTextMessageInput(process.env.ADMIN_WAID, adminForwardText))
+      .then(() => console.log(`Forwarded user message to admin.`))
+      .catch(err => console.error('Error forwarding to admin:', err.response ? err.response.data : err.message));
+    
+    // Respond to the webhook request.
     res.sendStatus(200);
   } catch (error) {
     console.error('Error processing webhook:', error.response ? error.response.data : error.message);
@@ -119,12 +96,12 @@ For further help, type "menu" to return to the main options.`;
   }
 });
 
-// A simple GET endpoint to confirm the server is running.
+// Simple GET endpoint to confirm the server is running.
 app.get('/', (req, res) => {
   res.send("FY'S PROPERTY WhatsApp Bot is running.");
 });
 
-// Start the server and send an admin alert once it's up.
+// Start the server and immediately send an alert message to the admin.
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   sendAdminAlert();
