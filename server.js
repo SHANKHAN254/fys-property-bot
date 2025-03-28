@@ -10,98 +10,100 @@ app.use(bodyParser.json());
 const PORT = process.env.PORT || 3000;
 
 /**
- * Sends a message via WhatsApp Cloud API.
- * @param {Object} data - The payload for the API call.
+ * Send a message using WhatsApp Cloud API.
+ * @param {Object} payload - JSON payload for the message.
  * @returns {Promise}
  */
-function sendMessage(data) {
-  const config = {
-    method: 'post',
-    url: `https://graph.facebook.com/${process.env.VERSION}/${process.env.PHONE_NUMBER_ID}/messages`,
-    headers: {
-      'Authorization': `Bearer ${process.env.ACCESS_TOKEN}`,
-      'Content-Type': 'application/json'
-    },
-    data: data
-  };
-  return axios(config);
+async function sendMessage(payload) {
+  try {
+    const response = await axios({
+      method: 'post',
+      url: `https://graph.facebook.com/${process.env.VERSION}/${process.env.PHONE_NUMBER_ID}/messages`,
+      headers: {
+        'Authorization': `Bearer ${process.env.ACCESS_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      data: payload
+    });
+    console.log('Message sent:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('Error sending message:', error.response ? error.response.data : error.message);
+    throw error;
+  }
 }
 
 /**
- * Returns a JSON payload for a text message.
- * @param {string} recipient - The recipient’s WhatsApp number.
- * @param {string} text - The message body.
- * @returns {Object} JSON payload.
+ * Create a text message payload.
+ * @param {string} recipient - WhatsApp number of recipient.
+ * @param {string} text - Message text.
+ * @returns {Object} Payload object.
  */
-function getTextMessageInput(recipient, text) {
+function createTextMessage(recipient, text) {
   return {
-    "messaging_product": "whatsapp",
-    "preview_url": false,
-    "recipient_type": "individual",
-    "to": recipient,
-    "type": "text",
-    "text": {
-      "body": text
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: recipient,
+    type: "text",
+    text: {
+      body: text
     }
   };
 }
 
 /**
- * Sends an alert message to the admin after the server starts.
+ * Immediately after startup, send an alert to the admin.
  */
-function sendAdminAlert() {
-  const adminNumber = process.env.ADMIN_WAID;
-  const alertText = `FY'S PROPERTY Bot has been successfully deployed and is running on port ${PORT}.`;
-  sendMessage(getTextMessageInput(adminNumber, alertText))
-    .then(() => {
-      console.log('Admin alert message sent.');
-    })
-    .catch((error) => {
-      console.error('Failed to send admin alert message:', error.response ? error.response.data : error.message);
-    });
+async function sendAdminAlert() {
+  const adminText = `FY'S PROPERTY Bot is LIVE on port ${PORT}.`;
+  try {
+    await sendMessage(createTextMessage(process.env.ADMIN_WAID, adminText));
+    console.log("Admin alert sent successfully.");
+  } catch (error) {
+    console.error("Failed to send admin alert.");
+  }
 }
 
 /**
  * Webhook endpoint to process incoming messages.
- * Every message from a user receives an immediate reply.
- * Expected POST body: { from: 'sender_phone', message: 'user input' }
+ * Every incoming message triggers an immediate reply and is forwarded to the admin.
  */
 app.post('/webhook', async (req, res) => {
   try {
-    // Get the sender's phone number and message from the request body.
-    const from = req.body.from;
-    const message = req.body.message || '';
+    // Expecting a JSON body: { "from": "<sender_number>", "message": "<user_message>" }
+    const { from, message } = req.body;
+    if (!from || !message) {
+      console.error("Invalid payload. Must include 'from' and 'message'.");
+      return res.status(400).send("Invalid payload. Must include 'from' and 'message'.");
+    }
     
-    // Log the incoming message.
     console.log(`Received message from ${from}: ${message}`);
-
-    // Prepare a generic, sensitive reply for any incoming message.
-    const replyText = `Thank you for contacting FY'S PROPERTY. We have received your message: "${message}". Our team will respond to you shortly.`;
-
-    // Send the reply immediately.
-    await sendMessage(getTextMessageInput(from, replyText));
-    console.log(`Replied to ${from} with: ${replyText}`);
-
-    // Optionally, forward the user's message to admin as well.
-    const adminForwardText = `User ${from} sent: "${message}"`;
-    sendMessage(getTextMessageInput(process.env.ADMIN_WAID, adminForwardText))
-      .then(() => console.log(`Forwarded user message to admin.`))
-      .catch(err => console.error('Error forwarding to admin:', err.response ? err.response.data : err.message));
     
-    // Respond to the webhook request.
+    // Create a reply message
+    const reply = `Thank you for contacting FY'S PROPERTY. We have received your message: "${message}". One of our agents will get back to you shortly.`;
+    
+    // Send reply to the user
+    await sendMessage(createTextMessage(from, reply));
+    console.log(`Replied to ${from}.`);
+    
+    // Forward the user's message to admin (for immediate alert)
+    const forward = `User ${from} sent: "${message}"`;
+    await sendMessage(createTextMessage(process.env.ADMIN_WAID, forward));
+    console.log("Forwarded user message to admin.");
+    
     res.sendStatus(200);
   } catch (error) {
-    console.error('Error processing webhook:', error.response ? error.response.data : error.message);
+    console.error("Error in /webhook:", error.response ? error.response.data : error.message);
     res.sendStatus(500);
   }
 });
 
-// Simple GET endpoint to confirm the server is running.
+// A simple endpoint to check that the server is running
 app.get('/', (req, res) => {
   res.send("FY'S PROPERTY WhatsApp Bot is running.");
 });
 
-// Start the server and immediately send an alert message to the admin.
+// Start the server and send admin alert
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   sendAdminAlert();
